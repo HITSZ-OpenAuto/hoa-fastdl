@@ -2,7 +2,7 @@
 
 A minimal Cloudflare Worker that proxies raw/release/tag GitHub URLs with:
 
-- No frontend/UI (returns plain usage text on root)
+- Optional separate frontend: a centered single input page lives under `frontend/index.html` and can be hosted anywhere (e.g., Cloudflare Pages). Paste a GitHub file URL and press Enter to download via the proxy backend.
 - Anti-indexing (robots.txt + `X-Robots-Tag` on all responses)
 - Whitelist support (substring match)
 - CORS enabled for all origins
@@ -38,16 +38,24 @@ Anti-indexing is enforced by:
 
 ## Deploy
 
-- Install Wrangler: `npm i -g wrangler`
-- Preview: `wrangler dev`
-- Deploy: `wrangler deploy`
+- Install deps: `npm install`
+- Preview (serves frontend + backend): `npm run dev`
+- Deploy to Cloudflare: `npm run deploy`
 
 To bind the worker under a specific route (e.g. `/gh/*` on a zone), add a `[routes]` entry in `wrangler.toml` or configure via Cloudflare dashboard, and set `PREFIX` accordingly (e.g., `"/gh/"`).
 
 ## Notes
 
-- This worker intentionally does not serve any UI or static frontend.
 - CORS is permissive (`*`) and preflight is handled.
 - On disallowed targets (by whitelist), the worker returns `403 blocked`.
 - For unmatched paths, it returns a plain-text usage message with HTTP 400.
 
+## Frontend (separate)
+
+- File: `frontend/index.html` (served by the Worker via `[assets]` in `wrangler.toml`).
+- By default, the frontend assumes same-origin backend and `PREFIX="/"`.
+- If you change the Worker `PREFIX`, edit `PREFIX` constant at the top of `frontend/index.html` to match (or pass `?prefix=/gh/`).
+
+Usage:
+
+- Open the Worker URL (dev or deployed), paste a GitHub file URL, press Enter. The page redirects to `<origin><PREFIX><your-url>` and the Worker streams the file.

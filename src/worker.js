@@ -163,6 +163,29 @@ export default {
       });
     }
 
+    // Serve static frontend from assets at root or at prefix root
+    if (
+      request.method === "GET" &&
+      (u.pathname === "/" || u.pathname === "/index.html" || u.pathname === "/favicon.ico" ||
+        u.pathname === prefix || u.pathname === prefix.slice(0, -1))
+    ) {
+      let assetRequest = request;
+      // If visiting PREFIX root, rewrite to '/'
+      if (u.pathname === prefix || u.pathname === prefix.slice(0, -1)) {
+        const assetURL = new URL(request.url);
+        assetURL.pathname = "/";
+        assetRequest = new Request(assetURL.toString(), request);
+      }
+      if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+        const assetRes = await env.ASSETS.fetch(assetRequest);
+        const h = new Headers(assetRes.headers);
+        h.set("x-robots-tag", "noindex, nofollow, noarchive, nosnippet");
+        h.set("access-control-allow-origin", "*");
+        h.set("access-control-expose-headers", "*");
+        return new Response(assetRes.body, { status: assetRes.status, headers: h });
+      }
+    }
+
     // Optional q param redirect support (kept from original)
     const q = u.searchParams.get("q");
     if (q) {
@@ -197,7 +220,7 @@ export default {
       return httpHandler(request, path, env);
     }
 
-    // No frontend: return minimal usage/help, not the original assets
+    // No matching route: return minimal usage/help
     return makeRes(usage(prefix), 400, { "content-type": "text/plain; charset=utf-8" });
   },
 };

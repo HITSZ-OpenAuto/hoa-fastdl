@@ -11,3 +11,6 @@ WHITE_LIST = "HITSZ-OpenAuto"
 # "1" to rewrite blob/raw to jsDelivr when possible; otherwise proxy directly.
 USE_JSDELIVR = "0"
 
+[assets]
+directory = "frontend"
+binding = "ASSETS"

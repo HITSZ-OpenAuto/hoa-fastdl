@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
+  <title>GitHub File Proxy</title>
+  <style>
+    :root { color-scheme: light dark; }
+    html, body { height: 100%; margin: 0; }
+    body { display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; }
+    .wrap { width: min(680px, 92vw); text-align: center; }
+    .box { display: flex; align-items: center; background: #fff; color: #000; border: 1px solid #dadce0; border-radius: 24px; padding: 10px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+    @media (prefers-color-scheme: dark) { .box { background: #121212; color: #e0e0e0; border-color: #2a2a2a; box-shadow: 0 1px 2px rgba(0,0,0,0.6);} }
+    input[type="text"] { flex: 1; border: none; outline: none; font-size: 18px; background: transparent; color: inherit; }
+    .hint { margin-top: 12px; font-size: 12px; opacity: 0.7; }
+  </style>
+  <link rel="icon" href="data:," />
+  <script>
+    // Configure your backend worker base and prefix here.
+    // Example: BACKEND_BASE = 'https://your-worker.workers.dev'; PREFIX = '/';
+    const BACKEND_BASE = '';
+    const PREFIX = '/';
+
+    function normPrefix(p) {
+      if (!p) return '/';
+      let s = ('' + p).trim();
+      if (!s.startsWith('/')) s = '/' + s;
+      if (!s.endsWith('/')) s = s + '/';
+      return s;
+    }
+
+    function getParam(name) {
+      return new URLSearchParams(location.search).get(name);
+    }
+
+    addEventListener('DOMContentLoaded', function () {
+      const input = document.getElementById('u');
+      input.focus();
+
+      const backend = getParam('backend') || BACKEND_BASE || '';
+      const prefix = normPrefix(getParam('prefix') || PREFIX || '/');
+
+      function go() {
+        const v = (input.value || '').trim();
+        if (!v) return;
+        // Navigate to backend worker; it will validate and stream the file
+        const url = (backend ? backend.replace(/\/$/, '') : '') + prefix + v;
+        location.href = url;
+      }
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') go();
+      });
+    });
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="box">
+      <input id="u" type="text" spellcheck="false" placeholder="Paste a GitHub file URL and press Enter" autocomplete="off" />
+    </div>
+  </div>
+</body>
+</html>
+
