@@ -141,16 +141,6 @@ async function proxy(urlObj, reqInit, env) {
   return new Response(res.body, { status, headers: resHdrNew });
 }
 
-function usage(prefix) {
-  return (
-    `GitHub proxy worker (no UI)\n` +
-    `- Prefix: ${prefix}\n` +
-    `- Usage: ${prefix}https://github.com/<owner>/<repo>/releases/download/<tag>/<file>\n` +
-    `         ${prefix}https://github.com/<owner>/<repo>/raw/<branch>/<path>\n` +
-    `         ${prefix}https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<path>\n`
-  );
-}
-
 export default {
   async fetch(request, env) {
     const prefix = normalizePrefix(env.PREFIX ?? DEFAULT_PREFIX);
@@ -219,9 +209,6 @@ export default {
       // Directly proxy these
       return httpHandler(request, path, env);
     }
-
-    // No matching route: return minimal usage/help
-    return makeRes(usage(prefix), 400, { "content-type": "text/plain; charset=utf-8" });
   },
 };
 
