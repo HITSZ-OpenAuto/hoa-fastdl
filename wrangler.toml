@@ -1,0 +1,13 @@
+name = "hoa-proxy"
+main = "src/worker.js"
+compatibility_date = "2024-10-01"
+workers_dev = true
+
+[vars]
+# Route prefix for the worker, keep leading & trailing slashes.
+PREFIX = "/"
+# Comma-separated substrings to allow; empty means allow all.
+WHITE_LIST = "HITSZ-OpenAuto"
+# "1" to rewrite blob/raw to jsDelivr when possible; otherwise proxy directly.
+USE_JSDELIVR = "0"
+
