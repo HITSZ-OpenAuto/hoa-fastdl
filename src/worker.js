@@ -44,6 +44,10 @@ function makeRes(body, status = 200, headers = {}) {
   return new Response(body, { status, headers: h });
 }
 
+function makeErrRes(msg, status = 400, headers = {}) {
+  return makeRes(null, 302, { location: `/error?code=${status}&msg=${msg}` });
+}
+
 function newUrl(urlStr, base) {
   try {
     return base ? new URL(urlStr, base) : new URL(urlStr);
@@ -86,14 +90,14 @@ async function httpHandler(req, pathname, env) {
     }
   }
   if (!allowed) {
-    return makeRes("blocked", 403, { "content-type": "text/plain; charset=utf-8" });
+    return makeErrRes("blocked", 403);
   }
 
   if (!/^https?:\/\//i.test(urlStr)) {
     urlStr = "https://" + urlStr;
   }
   const urlObj = newUrl(urlStr);
-  if (!urlObj) return makeRes("invalid target url", 400);
+  if (!urlObj) return makeErrRes("invalid target url", 400);
 
   const reqHdrNew = new Headers(req.headers);
   reqHdrNew.set("Accept-Language", "en");
@@ -156,7 +160,7 @@ export default {
     // Serve static frontend from assets at root or at prefix root
     if (
       request.method === "GET" &&
-      (u.pathname === "/" || u.pathname === "/index.html" || u.pathname === "/favicon.ico" ||
+      (u.pathname === "/" || u.pathname === "/index.html" || u.pathname === "/error" || u.pathname === "/favicon.ico" ||
         u.pathname === prefix || u.pathname === prefix.slice(0, -1))
     ) {
       let assetRequest = request;
@@ -168,11 +172,16 @@ export default {
       }
       if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
         const assetRes = await env.ASSETS.fetch(assetRequest);
+        let status = assetRes.status;
+        const code = parseInt(u.searchParams.get('code'));
+        console.log(code);
+        if (code && code >= 400 && code < 600)
+          status = code;
         const h = new Headers(assetRes.headers);
         h.set("x-robots-tag", "noindex, nofollow, noarchive, nosnippet");
         h.set("access-control-allow-origin", "*");
         h.set("access-control-expose-headers", "*");
-        return new Response(assetRes.body, { status: assetRes.status, headers: h });
+        return new Response(assetRes.body, { status, headers: h });
       }
     }
 
@@ -208,6 +217,8 @@ export default {
     if (exp1.test(path) || exp3.test(path) || exp4.test(path) || exp5.test(path) || exp6.test(path)) {
       // Directly proxy these
       return httpHandler(request, path, env);
+    } else {
+      return makeErrRes("resource is not in whitelist", 403)
     }
   },
 };
