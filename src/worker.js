@@ -90,7 +90,7 @@ async function httpHandler(req, pathname, env) {
     }
   }
   if (!allowed) {
-    return makeErrRes("blocked", 403);
+    return makeErrRes("owner is not allowed", 403);
   }
 
   if (!/^https?:\/\//i.test(urlStr)) {
@@ -115,6 +115,10 @@ async function proxy(urlObj, reqInit, env) {
   const res = await fetch(urlObj.href, reqInit);
   const resHdrNew = new Headers(res.headers);
   const status = res.status;
+  
+  // Reject 4XX 5XX
+  if (status >= 400)
+    return makeErrRes("failed to access resource", status);
 
   // Handle redirects
   if (resHdrNew.has("location")) {
