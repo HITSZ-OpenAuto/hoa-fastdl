@@ -10,8 +10,10 @@ PREFIX = "/"
 WHITE_LIST = "HITSZ-OpenAuto"
 # "1" to rewrite blob/raw to jsDelivr when possible; otherwise proxy directly.
 USE_JSDELIVR = "0"
+# Comma-separated list of allowed origins for CORS.
+ALLOWED_ORIGINS = "hoa.moe"
 
 [assets]
 directory = "frontend"
 binding = "ASSETS"
-run_worker_first = true
+run_worker_first = false
