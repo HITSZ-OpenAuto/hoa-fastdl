@@ -35,12 +35,23 @@ function parseWhiteList(str) {
     .filter(Boolean);
 }
 
+/**
+ * Check if origin is allowed (hoa.moe or *.hoa.moe)
+ */
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname;
+    // Match hoa.moe exactly or any subdomain *.hoa.moe
+    return hostname === 'hoa.moe' || hostname.endsWith('.hoa.moe');
+  } catch {
+    return false;
+  }
+}
+
 function makeRes(body, status = 200, headers = {}) {
   const h = new Headers(headers);
-  h.set("access-control-allow-origin", "*");
-  h.set("access-control-expose-headers", "*");
-  // Prevent indexing by search engines
-  h.set("x-robots-tag", "noindex, nofollow, noarchive, nosnippet");
   return new Response(body, { status, headers: h });
 }
 
@@ -64,13 +75,10 @@ function checkUrl(u) {
 }
 
 function getPreflightHeaders() {
-  const h = new Headers({
-    "access-control-allow-origin": "*",
+  return new Headers({
     "access-control-allow-methods": "GET,POST,PUT,PATCH,TRACE,DELETE,HEAD,OPTIONS",
     "access-control-max-age": "1728000",
   });
-  h.set("x-robots-tag", "noindex, nofollow, noarchive, nosnippet");
-  return h;
 }
 
 async function httpHandler(req, pathname, env) {
@@ -136,11 +144,6 @@ async function proxy(urlObj, reqInit, env) {
     }
   }
 
-  // CORS + anti-indexing
-  resHdrNew.set("access-control-expose-headers", "*");
-  resHdrNew.set("access-control-allow-origin", "*");
-  resHdrNew.set("x-robots-tag", "noindex, nofollow, noarchive, nosnippet");
-
   // Remove security policies that can interfere with proxying
   resHdrNew.delete("content-security-policy");
   resHdrNew.delete("content-security-policy-report-only");
@@ -149,81 +152,95 @@ async function proxy(urlObj, reqInit, env) {
   return new Response(res.body, { status, headers: resHdrNew });
 }
 
+async function handleRequest(request, env) {
+  const prefix = normalizePrefix(env.PREFIX ?? DEFAULT_PREFIX);
+  const u = new URL(request.url);
+
+  // robots.txt: fully disallow crawling
+  if (u.pathname === "/robots.txt") {
+    return makeRes("User-agent: *\nDisallow: /\n", 200, {
+      "content-type": "text/plain; charset=utf-8",
+    });
+  }
+
+  // Serve static frontend from assets at root or at prefix root
+  if (
+    request.method === "GET" &&
+    (u.pathname === "/" || u.pathname === "/index.html" || u.pathname === "/error" || u.pathname === "/favicon.ico" ||
+      u.pathname === prefix || u.pathname === prefix.slice(0, -1))
+  ) {
+    let assetRequest = request;
+    // If visiting PREFIX root, rewrite to '/'
+    if (u.pathname === prefix || u.pathname === prefix.slice(0, -1)) {
+      const assetURL = new URL(request.url);
+      assetURL.pathname = "/";
+      assetRequest = new Request(assetURL.toString(), request);
+    }
+    if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+      const assetRes = await env.ASSETS.fetch(assetRequest);
+      let status = assetRes.status;
+      const code = parseInt(u.searchParams.get('code'));
+      if (code && code >= 400 && code < 600)
+        status = code;
+      const h = new Headers(assetRes.headers);
+      return new Response(assetRes.body, { status, headers: h });
+    }
+  }
+
+  // Optional q param redirect support
+  const q = u.searchParams.get("q");
+  if (q) {
+    const loc = `https://${u.host}${prefix}${q}`;
+    return makeRes(null, 301, { location: loc });
+  }
+
+  // Cloudflare may collapse '//' to '/'. Rebuild target path from remainder
+  let path = u.href
+    .substring(u.origin.length + prefix.length)
+    .replace(/^https?:\/+/i, "https://");
+
+  // Route matching
+  const useJsDelivr = String(env.USE_JSDELIVR ?? (DEFAULT_USE_JSDELIVR ? "1" : "0")) === "1";
+
+  if (exp2.test(path)) {
+    // github.com/.../(blob|raw)/...
+    if (useJsDelivr) {
+      // e.g., github.com/a/b/blob/x => cdn.jsdelivr.net/gh/a/b@x
+      const newUrl = path
+        .replace("/blob/", "@")
+        .replace(/^(?:https?:\/\/)?github\.com/i, "https://cdn.jsdelivr.net/gh");
+      return makeRes(null, 302, { location: newUrl });
+    } else {
+      path = path.replace("/blob/", "/raw/");
+      return httpHandler(request, path, env);
+    }
+  }
+
+  if (exp1.test(path) || exp3.test(path) || exp4.test(path) || exp5.test(path) || exp6.test(path)) {
+    // Directly proxy these
+    return httpHandler(request, path, env);
+  } else {
+    return makeErrRes("resource is not in whitelist", 403)
+  }
+}
+
 export default {
   async fetch(request, env) {
-    const prefix = normalizePrefix(env.PREFIX ?? DEFAULT_PREFIX);
-    const u = new URL(request.url);
+    const response = await handleRequest(request, env);
+    const newHeaders = new Headers(response.headers);
+    const origin = request.headers.get("origin");
 
-    // robots.txt: fully disallow crawling
-    if (u.pathname === "/robots.txt") {
-      return makeRes("User-agent: *\nDisallow: /\n", 200, {
-        "content-type": "text/plain; charset=utf-8",
-      });
+    // CORS + anti-indexing
+    if (isAllowedOrigin(origin)) {
+      newHeaders.set("access-control-allow-origin", origin);
+      newHeaders.set("access-control-expose-headers", "*");
     }
+    newHeaders.set("x-robots-tag", "noindex, nofollow, noarchive, nosnippet");
 
-    // Serve static frontend from assets at root or at prefix root
-    if (
-      request.method === "GET" &&
-      (u.pathname === "/" || u.pathname === "/index.html" || u.pathname === "/error" || u.pathname === "/favicon.ico" ||
-        u.pathname === prefix || u.pathname === prefix.slice(0, -1))
-    ) {
-      let assetRequest = request;
-      // If visiting PREFIX root, rewrite to '/'
-      if (u.pathname === prefix || u.pathname === prefix.slice(0, -1)) {
-        const assetURL = new URL(request.url);
-        assetURL.pathname = "/";
-        assetRequest = new Request(assetURL.toString(), request);
-      }
-      if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
-        const assetRes = await env.ASSETS.fetch(assetRequest);
-        let status = assetRes.status;
-        const code = parseInt(u.searchParams.get('code'));
-        console.log(code);
-        if (code && code >= 400 && code < 600)
-          status = code;
-        const h = new Headers(assetRes.headers);
-        h.set("x-robots-tag", "noindex, nofollow, noarchive, nosnippet");
-        h.set("access-control-allow-origin", "*");
-        h.set("access-control-expose-headers", "*");
-        return new Response(assetRes.body, { status, headers: h });
-      }
-    }
-
-    // Optional q param redirect support (kept from original)
-    const q = u.searchParams.get("q");
-    if (q) {
-      const loc = `https://${u.host}${prefix}${q}`;
-      return makeRes(null, 301, { location: loc });
-    }
-
-    // Cloudflare may collapse '//' to '/'. Rebuild target path from remainder
-    let path = u.href
-      .substring(u.origin.length + prefix.length)
-      .replace(/^https?:\/+/i, "https://");
-
-    // Route matching
-    const useJsDelivr = String(env.USE_JSDELIVR ?? (DEFAULT_USE_JSDELIVR ? "1" : "0")) === "1";
-
-    if (exp2.test(path)) {
-      // github.com/.../(blob|raw)/...
-      if (useJsDelivr) {
-        // e.g., github.com/a/b/blob/x => cdn.jsdelivr.net/gh/a/b@x
-        const newUrl = path
-          .replace("/blob/", "@")
-          .replace(/^(?:https?:\/\/)?github\.com/i, "https://cdn.jsdelivr.net/gh");
-        return makeRes(null, 302, { location: newUrl });
-      } else {
-        path = path.replace("/blob/", "/raw/");
-        return httpHandler(request, path, env);
-      }
-    }
-
-    if (exp1.test(path) || exp3.test(path) || exp4.test(path) || exp5.test(path) || exp6.test(path)) {
-      // Directly proxy these
-      return httpHandler(request, path, env);
-    } else {
-      return makeErrRes("resource is not in whitelist", 403)
-    }
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
   },
 };
-
