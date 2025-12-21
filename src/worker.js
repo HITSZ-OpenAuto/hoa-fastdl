@@ -197,6 +197,12 @@ async function handleRequest(request, env) {
     return makeRes(null, 301, { location: loc });
   }
 
+  // Block search engine crawlers to trigger de-indexing
+  const ua = request.headers.get("User-Agent") || "";
+  if (ua.toLowerCase().includes("bingbot") || ua.toLowerCase().includes("duckduckbot")) {
+    return makeRes("Gone", 410);
+  }
+
   const referer = request.headers.get("Referer");
   if (referer) {
     try {
