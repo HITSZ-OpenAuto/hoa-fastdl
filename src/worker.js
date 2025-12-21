@@ -3,10 +3,12 @@
 // - WHITE_LIST: comma-separated substrings that must be present in target URL path
 //               to allow proxying (default "HITSZ-OpenAuto"). Empty means allow all.
 // - USE_JSDELIVR: "1" to rewrite blob/raw to jsDelivr when possible; "0" to proxy directly.
+// - ALLOWED_ORIGINS: comma-separated list of allowed origins for CORS (default "hoa.moe").
 
 const DEFAULT_PREFIX = "/";
 const DEFAULT_WHITE_LIST = "HITSZ-OpenAuto";
 const DEFAULT_USE_JSDELIVR = false;
+const DEFAULT_ALLOWED_ORIGINS = "hoa.moe";
 
 // Patterns
 const exp1 = /^(?:https?:\/\/)?github\.com\/.+?\/.+?\/(?:releases|archive)\/.*$/i;
@@ -36,15 +38,21 @@ function parseWhiteList(str) {
 }
 
 /**
- * Check if origin is allowed (hoa.moe or *.hoa.moe)
+ * Check if origin is allowed
  */
-function isAllowedOrigin(origin) {
+function isAllowedOrigin(origin, env) {
   if (!origin) return false;
   try {
     const url = new URL(origin);
     const hostname = url.hostname;
-    // Match hoa.moe exactly or any subdomain *.hoa.moe
-    return hostname === 'hoa.moe' || hostname.endsWith('.hoa.moe');
+    const allowedOrigins = (env.ALLOWED_ORIGINS ?? DEFAULT_ALLOWED_ORIGINS).split(",");
+    for (const allowed of allowedOrigins) {
+      const s = allowed.trim();
+      if (!s) continue;
+      // Match exactly or any subdomain
+      if (hostname === s || hostname.endsWith('.' + s)) return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -231,7 +239,7 @@ export default {
     const origin = request.headers.get("origin");
 
     // CORS + anti-indexing
-    if (isAllowedOrigin(origin)) {
+    if (isAllowedOrigin(origin, env)) {
       newHeaders.set("access-control-allow-origin", origin);
       newHeaders.set("access-control-expose-headers", "*");
     }
