@@ -16,4 +16,4 @@ ALLOWED_ORIGINS = "hoa.moe"
 [assets]
 directory = "frontend"
 binding = "ASSETS"
-run_worker_first = true
+run_worker_first = false

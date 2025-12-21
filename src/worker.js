@@ -164,13 +164,6 @@ async function handleRequest(request, env) {
   const prefix = normalizePrefix(env.PREFIX ?? DEFAULT_PREFIX);
   const u = new URL(request.url);
 
-  // robots.txt: fully disallow crawling
-  if (u.pathname === "/robots.txt") {
-    return makeRes("User-agent: *\nDisallow: /\n", 200, {
-      "content-type": "text/plain; charset=utf-8",
-    });
-  }
-
   // Serve static frontend from assets at root or at prefix root
   if (
     request.method === "GET" &&
