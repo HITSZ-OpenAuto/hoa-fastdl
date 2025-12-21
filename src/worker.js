@@ -92,7 +92,9 @@ function getPreflightHeaders() {
 async function httpHandler(req, pathname, env) {
   // CORS preflight
   if (req.method === "OPTIONS" && req.headers.has("access-control-request-headers")) {
-    return new Response(null, { status: 204, headers: getPreflightHeaders() });
+    const preflightHeaders = getPreflightHeaders();
+    preflightHeaders.set("access-control-allow-headers", req.headers.get("access-control-request-headers"));
+    return new Response(null, { status: 204, headers: preflightHeaders });
   }
 
   // Whitelist check
