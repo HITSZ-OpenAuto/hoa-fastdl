@@ -3,12 +3,12 @@
 // - WHITE_LIST: comma-separated substrings that must be present in target URL path
 //               to allow proxying (default "HITSZ-OpenAuto"). Empty means allow all.
 // - USE_JSDELIVR: "1" to rewrite blob/raw to jsDelivr when possible; "0" to proxy directly.
-// - ALLOWED_ORIGINS: comma-separated list of allowed origins for CORS (default "hoa.moe").
+// - ALLOWED_ORIGINS: comma-separated list of allowed origins for CORS (default "hoa.moe, localhost").
 
 const DEFAULT_PREFIX = "/";
 const DEFAULT_WHITE_LIST = "HITSZ-OpenAuto";
 const DEFAULT_USE_JSDELIVR = false;
-const DEFAULT_ALLOWED_ORIGINS = "hoa.moe";
+const DEFAULT_ALLOWED_ORIGINS = "hoa.moe, localhost";
 
 // Patterns
 const exp1 = /^(?:https?:\/\/)?github\.com\/.+?\/.+?\/(?:releases|archive)\/.*$/i;
