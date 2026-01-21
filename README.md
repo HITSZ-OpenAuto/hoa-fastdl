@@ -23,38 +23,3 @@ Configuration is managed via environment variables in `wrangler.toml`:
 | `USE_JSDELIVR` | "1" to rewrite blob/raw links to jsDelivr; "0" to proxy directly. |
 | `ALLOWED_ORIGINS` | Comma-separated list of allowed origins for CORS. |
 
-## Deployment
-
-### Prerequisites
-
-- [Node.js](https://nodejs.org/) and npm installed.
-- A Cloudflare account and the [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) configured.
-
-### Steps
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/HITSZ-OpenAuto/hoa-fastdl.git
-   cd hoa-fastdl
-   ```
-
-2. **Install dependencies:**
-
-   ```bash
-   npm install
-   ```
-
-3. **Configure `wrangler.toml`:**
-
-   Edit `wrangler.toml` to customize your environment variables or worker name.
-
-4. **Deploy to Cloudflare:**
-
-   ```bash
-   npm run deploy
-   ```
-
-## License
-
-This project is licensed under the MIT License.
