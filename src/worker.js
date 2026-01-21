@@ -165,7 +165,7 @@ async function handleRequest(request, env) {
   if (
     request.method === "GET" &&
     (u.pathname === "/" || u.pathname === "/index.html" || u.pathname === "/error" || u.pathname === "/favicon.ico" ||
-      u.pathname === prefix || u.pathname === prefix.slice(0, -1))
+      u.pathname === "/robots.txt" || u.pathname === prefix || u.pathname === prefix.slice(0, -1))
   ) {
     let assetRequest = request;
     // If visiting PREFIX root, rewrite to '/'
