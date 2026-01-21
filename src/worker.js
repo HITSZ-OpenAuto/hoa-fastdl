@@ -49,7 +49,27 @@ function isAllowedOrigin(origin, env) {
   }
 }
 
-async function proxy(url, request, env) {
+function handleCorsPreflightRequest(request, env) {
+  const origin = request.headers.get("origin");
+  const headers = new Headers({
+    "access-control-allow-methods": "GET,POST,PUT,PATCH,TRACE,DELETE,HEAD,OPTIONS",
+    "access-control-max-age": "1728000",
+  });
+  if (request.headers.has("access-control-request-headers")) {
+    headers.set("access-control-allow-headers", request.headers.get("access-control-request-headers"));
+  }
+  if (isAllowedOrigin(origin, env)) {
+    headers.set("access-control-allow-origin", origin);
+  }
+  return new Response(null, { status: 204, headers });
+}
+
+const MAX_REDIRECTS = 5;
+
+async function proxy(url, request, env, redirectCount = 0) {
+  if (redirectCount >= MAX_REDIRECTS) {
+    return Response.redirect(`${new URL(request.url).origin}${normalizePrefix(env.PREFIX)}error?code=508&msg=too many redirects`, 302);
+  }
   const targetUrl = new URL(url);
   const reqInit = {
     method: request.method,
@@ -81,7 +101,7 @@ async function proxy(url, request, env) {
       resHdrNew.set("location", `${new URL(request.url).origin}${prefix}${loc}`);
     } else {
       // Follow other redirects
-      return proxy(loc, request, env);
+      return proxy(loc, request, env, redirectCount + 1);
     }
   }
 
@@ -95,7 +115,12 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const prefix = normalizePrefix(env.PREFIX);
-    
+
+    // 0. CORS Preflight
+    if (request.method === "OPTIONS" && request.headers.has("access-control-request-headers")) {
+      return handleCorsPreflightRequest(request, env);
+    }
+
     // 1. Static Assets & Frontend Routing
     const isRoot = url.pathname === "/" || url.pathname === prefix || url.pathname === prefix.slice(0, -1);
     const isStatic = ["/index.html", "/error", "/favicon.ico", "/robots.txt"].includes(url.pathname);
@@ -114,55 +139,66 @@ export default {
       }
     }
 
-    // 2. Bot Protection (using request.cf)
+    // 2. Query param redirect support (?q=<url>)
+    const q = url.searchParams.get("q");
+    if (q) {
+      return Response.redirect(`https://${url.host}${prefix}${q}`, 301);
+    }
+
+    // 3. Bot Protection (using request.cf)
     const ua = request.headers.get("User-Agent") || "";
-    const isBot = /bingbot|duckduckbot|googlebot|baiduspider/i.test(ua) || 
-                  (request.cf?.asOrganization && /bing|duckduckgo|baidu/i.test(request.cf.asOrganization));
-    
+    const isBot = /bingbot|duckduckbot|googlebot|baiduspider/i.test(ua) ||
+                  (request.cf?.asOrganization && /bing|duckduckgo|baidu|google/i.test(request.cf.asOrganization));
+
     if (isBot) {
       return new Response("Gone", { status: 410 });
     }
 
-    // 3. Referer Block
+    // 4. Referer Block
     const referer = request.headers.get("Referer");
     if (referer) {
       try {
         const refHost = new URL(referer).hostname;
-        if (/bing\.com|duckduckgo\.com|baidu\.com/i.test(refHost)) {
+        if (/bing\.com|duckduckgo\.com|baidu\.com|google\.com/i.test(refHost)) {
           return Response.redirect(`${url.origin}${prefix}error?code=403&msg=referer not allowed`, 302);
         }
       } catch {}
     }
 
-    // 4. Extract Target Path
+    // 5. Extract Target Path
     let targetPath = url.pathname.substring(prefix.length) + url.search;
     if (!/^https?:\/\//i.test(targetPath)) {
       targetPath = "https://" + targetPath.replace(/^\/+/, "");
     }
 
-    // 5. Whitelist Check
+    // 6. Whitelist Check
     const whiteList = parseWhiteList(env.WHITE_LIST);
     if (whiteList.length > 0 && !whiteList.some(needle => targetPath.includes(needle))) {
       return Response.redirect(`${url.origin}${prefix}error?code=403&msg=owner is not allowed`, 302);
     }
 
-    // 6. GitHub Routing & JSDelivr Optimization
+    // 7. GitHub Routing & JSDelivr Optimization
     try {
       const targetUrl = new URL(targetPath);
       if (!isGitHubUrl(targetUrl)) {
         return Response.redirect(`${url.origin}${prefix}error?code=403&msg=resource not allowed`, 302);
       }
 
-      // JSDelivr Rewrite optimization
-      if (env.USE_JSDELIVR === "1" && targetUrl.hostname === "github.com") {
+      // JSDelivr Rewrite optimization or /blob/ -> /raw/ conversion
+      if (targetUrl.hostname === "github.com") {
         const ghBlob = new URLPattern({ pathname: '/:owner/:repo/blob/:ref/:path*' }).exec(targetUrl);
         if (ghBlob) {
-          const { owner, repo, ref, path } = ghBlob.pathname.groups;
-          return Response.redirect(`https://cdn.jsdelivr.net/gh/${owner}/${repo}@${ref}/${path}`, 302);
+          if (env.USE_JSDELIVR === "1") {
+            const { owner, repo, ref, path } = ghBlob.pathname.groups;
+            return Response.redirect(`https://cdn.jsdelivr.net/gh/${owner}/${repo}@${ref}/${path}`, 302);
+          } else {
+            // Convert /blob/ to /raw/ for direct GitHub access
+            targetUrl.pathname = targetUrl.pathname.replace('/blob/', '/raw/');
+          }
         }
       }
 
-      // 7. Proxy & Headers
+      // 8. Proxy & Headers
       const response = await proxy(targetUrl, request, env);
       const newHeaders = new Headers(response.headers);
       const origin = request.headers.get("origin");
