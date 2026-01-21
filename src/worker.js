@@ -16,6 +16,9 @@ const PATTERNS = [
   new URLPattern({ hostname: 'github.com', pathname: '/:owner/:repo/tags*' }),
 ];
 
+// Pattern for extracting blob path components (used for JSDelivr rewrite)
+const GH_BLOB_PATTERN = new URLPattern({ hostname: 'github.com', pathname: '/:owner/:repo/blob/:ref/:path*' });
+
 // Helper to check if a URL matches any GitHub pattern
 function isGitHubUrl(url) {
   try {
@@ -186,7 +189,7 @@ export default {
 
       // JSDelivr Rewrite optimization or /blob/ -> /raw/ conversion
       if (targetUrl.hostname === "github.com") {
-        const ghBlob = new URLPattern({ pathname: '/:owner/:repo/blob/:ref/:path*' }).exec(targetUrl);
+        const ghBlob = GH_BLOB_PATTERN.exec(targetUrl);
         if (ghBlob) {
           if (env.USE_JSDELIVR === "1") {
             const { owner, repo, ref, path } = ghBlob.pathname.groups;
