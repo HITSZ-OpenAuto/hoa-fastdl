@@ -1,14 +1,9 @@
 // Config via env vars (wrangler.toml [vars]):
-// - PREFIX: route prefix for this worker (default "/"). Example: "/gh/"
+// - PREFIX: route prefix for this worker. Example: "/gh/"
 // - WHITE_LIST: comma-separated substrings that must be present in target URL path
-//               to allow proxying (default "HITSZ-OpenAuto"). Empty means allow all.
+//               to allow proxying. Empty means allow all.
 // - USE_JSDELIVR: "1" to rewrite blob/raw to jsDelivr when possible; "0" to proxy directly.
-// - ALLOWED_ORIGINS: comma-separated list of allowed origins for CORS (default "hoa.moe, localhost").
-
-const DEFAULT_PREFIX = "/";
-const DEFAULT_WHITE_LIST = "HITSZ-OpenAuto";
-const DEFAULT_USE_JSDELIVR = false;
-const DEFAULT_ALLOWED_ORIGINS = "hoa.moe, localhost";
+// - ALLOWED_ORIGINS: comma-separated list of allowed origins for CORS.
 
 // Patterns
 const exp1 = /^(?:https?:\/\/)?github\.com\/.+?\/.+?\/(?:releases|archive)\/.*$/i;
@@ -45,7 +40,7 @@ function isAllowedOrigin(origin, env) {
   try {
     const url = new URL(origin);
     const hostname = url.hostname;
-    const allowedOrigins = (env.ALLOWED_ORIGINS ?? DEFAULT_ALLOWED_ORIGINS).split(",");
+    const allowedOrigins = (env.ALLOWED_ORIGINS || "").split(",");
     for (const allowed of allowedOrigins) {
       const s = allowed.trim();
       if (!s) continue;
@@ -98,7 +93,7 @@ async function httpHandler(req, pathname, env) {
   }
 
   // Whitelist check
-  const whiteList = parseWhiteList(env.WHITE_LIST ?? DEFAULT_WHITE_LIST);
+  const whiteList = parseWhiteList(env.WHITE_LIST);
   let urlStr = pathname;
   let allowed = whiteList.length === 0; // empty whitelist => allow all
   for (const needle of whiteList) {
@@ -140,7 +135,7 @@ async function proxy(urlObj, reqInit, env) {
 
   // Handle redirects
   if (resHdrNew.has("location")) {
-    const prefix = normalizePrefix(env.PREFIX ?? DEFAULT_PREFIX);
+    const prefix = normalizePrefix(env.PREFIX);
     let location = resHdrNew.get("location") || "";
 
     // If the redirect target is a GitHub/Gist/Raw URL we want to translate it back
@@ -163,7 +158,7 @@ async function proxy(urlObj, reqInit, env) {
 }
 
 async function handleRequest(request, env) {
-  const prefix = normalizePrefix(env.PREFIX ?? DEFAULT_PREFIX);
+  const prefix = normalizePrefix(env.PREFIX);
   const u = new URL(request.url);
 
   // Serve static frontend from assets at root or at prefix root
@@ -221,7 +216,7 @@ async function handleRequest(request, env) {
     .replace(/^https?:\/+/i, "https://");
 
   // Route matching
-  const useJsDelivr = String(env.USE_JSDELIVR ?? (DEFAULT_USE_JSDELIVR ? "1" : "0")) === "1";
+  const useJsDelivr = String(env.USE_JSDELIVR) === "1";
 
   if (exp2.test(path)) {
     // github.com/.../(blob|raw)/...
