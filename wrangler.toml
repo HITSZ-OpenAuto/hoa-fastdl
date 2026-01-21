@@ -1,6 +1,6 @@
 name = "hoa-fastdl"
 main = "src/index.js"
-compatibility_date = "2024-10-01"
+compatibility_date = "2026-01-20"
 workers_dev = true
 
 [placement]
