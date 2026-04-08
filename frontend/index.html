@@ -62,5 +62,9 @@
       <input id="u" type="text" spellcheck="false" placeholder="Paste a GitHub file URL and press Enter" autocomplete="off" />
     </div>
   </div>
+  <footer style="position: fixed; bottom: 20px; width: 100%; text-align: center; font-size: 14px; opacity: 0.7;">
+    <p>©<span id="year"></span> <a href="https://github.com/HITSZ-OpenAuto/" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">HITSZ OpenAuto</a></p>
+  </footer>
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>
