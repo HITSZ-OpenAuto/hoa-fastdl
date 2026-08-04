@@ -192,24 +192,6 @@ async function handleRequest(request, env) {
     return makeRes(null, 301, { location: loc });
   }
 
-  // Block search engine crawlers to trigger de-indexing
-  const ua = request.headers.get("User-Agent") || "";
-  if (ua.toLowerCase().includes("bingbot") || ua.toLowerCase().includes("duckduckbot")) {
-    return makeRes("Gone", 410);
-  }
-
-  const referer = request.headers.get("Referer");
-  if (referer) {
-    try {
-      const refHostname = new URL(referer).hostname;
-      if (refHostname.includes("bing.com") || refHostname.includes("duckduckgo.com")) {
-        return makeErrRes("referer not allowed", 403);
-      }
-    } catch (e) {
-      // ignore invalid referer
-    }
-  }
-
   // Cloudflare may collapse '//' to '/'. Rebuild target path from remainder
   let path = u.href
     .substring(u.origin.length + prefix.length)
