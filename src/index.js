@@ -1,3 +1,5 @@
+import 'urlpattern-polyfill';
+
 // Config via env vars (wrangler.toml [vars]):
 // - PREFIX: route prefix for this worker. Example: "/gh/"
 // - WHITE_LIST: comma-separated substrings that must be present in target URL path
@@ -5,13 +7,50 @@
 // - USE_JSDELIVR: "1" to rewrite blob/raw to jsDelivr when possible; "0" to proxy directly.
 // - ALLOWED_ORIGINS: comma-separated list of allowed origins for CORS.
 
-// Patterns
-const exp1 = /^(?:https?:\/\/)?github\.com\/.+?\/.+?\/(?:releases|archive)\/.*$/i;
-const exp2 = /^(?:https?:\/\/)?github\.com\/.+?\/.+?\/(?:blob|raw)\/.*$/i;
-const exp3 = /^(?:https?:\/\/)?github\.com\/.+?\/.+?\/(?:info|git-).*$/i;
-const exp4 = /^(?:https?:\/\/)?raw\.(?:githubusercontent|github)\.com\/.+?\/.+?\/.+?\/.+$/i;
-const exp5 = /^(?:https?:\/\/)?gist\.(?:githubusercontent|github)\.com\/.+?\/.+?\/.+$/i;
-const exp6 = /^(?:https?:\/\/)?github\.com\/.+?\/.+?\/tags.*$/i;
+// URLPattern definitions for GitHub resources
+const blobRawPatterns = [
+  new URLPattern({ protocol: 'http{s}?', hostname: 'github.com', pathname: '/*/*\/blob/*' }),
+  new URLPattern({ protocol: 'http{s}?', hostname: 'github.com', pathname: '/*/*\/raw/*' }),
+];
+
+const directProxyPatterns = [
+  new URLPattern({ protocol: 'http{s}?', hostname: 'github.com', pathname: '/*/*\/releases/*' }),
+  new URLPattern({ protocol: 'http{s}?', hostname: 'github.com', pathname: '/*/*\/archive/*' }),
+  new URLPattern({ protocol: 'http{s}?', hostname: 'github.com', pathname: '/*/*\/info*' }),
+  new URLPattern({ protocol: 'http{s}?', hostname: 'github.com', pathname: '/*/*\/git-*' }),
+  new URLPattern({ protocol: 'http{s}?', hostname: 'raw.githubusercontent.com', pathname: '/*/*/*/*' }),
+  new URLPattern({ protocol: 'http{s}?', hostname: 'raw.github.com', pathname: '/*/*/*/*' }),
+  new URLPattern({ protocol: 'http{s}?', hostname: 'gist.githubusercontent.com', pathname: '/*/*/*' }),
+  new URLPattern({ protocol: 'http{s}?', hostname: 'gist.github.com', pathname: '/*/*/*' }),
+  new URLPattern({ protocol: 'http{s}?', hostname: 'github.com', pathname: '/*/*\/tags*' }),
+];
+
+/**
+ * Check if a path/URL represents a blob or raw file resource
+ */
+function isBlobRawUrl(u) {
+  if (!u) return false;
+  let target = String(u).trim();
+  if (!/^https?:\/\//i.test(target)) {
+    target = 'https://' + target;
+  }
+  return blobRawPatterns.some((p) => p.test(target));
+}
+
+/**
+ * Check if a URL matches any supported GitHub resource pattern
+ */
+function checkUrl(u) {
+  if (!u) return false;
+  let target = String(u).trim();
+  if (!/^https?:\/\//i.test(target)) {
+    target = 'https://' + target;
+  }
+  return (
+    isBlobRawUrl(target) ||
+    directProxyPatterns.some((p) => p.test(target))
+  );
+}
 
 /**
  * Normalize PREFIX to always start and end with '/'
@@ -68,13 +107,6 @@ function newUrl(urlStr, base) {
   } catch (err) {
     return null;
   }
-}
-
-function checkUrl(u) {
-  for (const i of [exp1, exp2, exp3, exp4, exp5, exp6]) {
-    if (u.search(i) === 0) return true;
-  }
-  return false;
 }
 
 function getPreflightHeaders() {
@@ -200,7 +232,7 @@ async function handleRequest(request, env) {
   // Route matching
   const useJsDelivr = String(env.USE_JSDELIVR) === "1";
 
-  if (exp2.test(path)) {
+  if (isBlobRawUrl(path)) {
     // github.com/.../(blob|raw)/...
     if (useJsDelivr) {
       // e.g., github.com/a/b/blob/x => cdn.jsdelivr.net/gh/a/b@x
@@ -214,11 +246,11 @@ async function handleRequest(request, env) {
     }
   }
 
-  if (exp1.test(path) || exp3.test(path) || exp4.test(path) || exp5.test(path) || exp6.test(path)) {
+  if (checkUrl(path)) {
     // Directly proxy these
     return httpHandler(request, path, env);
   } else {
-    return makeErrRes("resource is not in whitelist", 403)
+    return makeErrRes("resource is not in whitelist", 403);
   }
 }
 
