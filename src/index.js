@@ -62,6 +62,17 @@ function makeErrRes(msg, status = 400, headers = {}) {
   return makeRes(null, 302, { location: `/error?code=${status}&msg=${msg}` });
 }
 
+async function makeNotFoundRes(request, env) {
+  // Render the existing error page at the original URL, without a redirect.
+  if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+    const assetRes = await env.ASSETS.fetch(new Request(new URL("/error", request.url)));
+    if (assetRes.ok) {
+      return makeRes(request.method === "HEAD" ? null : assetRes.body, 404, assetRes.headers);
+    }
+  }
+  return makeRes(request.method === "HEAD" ? null : "Not Found", 404);
+}
+
 function newUrl(urlStr, base) {
   try {
     return base ? new URL(urlStr, base) : new URL(urlStr);
@@ -218,7 +229,7 @@ async function handleRequest(request, env) {
     // Directly proxy these
     return httpHandler(request, path, env);
   } else {
-    return makeErrRes("resource is not in whitelist", 403)
+    return makeNotFoundRes(request, env);
   }
 }
 
