@@ -26,8 +26,10 @@
   // example: ?code=403&msg=Forbidden
   (function () {
     const p = new URLSearchParams(location.search);
-    const code = p.get('code');
-    const msg = p.get('msg');
+    // Unmatched routes render this page directly with a 404 status.
+    const isErrorPage = location.pathname === '/error';
+    const code = isErrorPage ? p.get('code') : '404';
+    const msg = isErrorPage ? p.get('msg') : 'Resource not found';
     if (code) {
       document.getElementById('code').textContent = code;
       document.title = `Error Code ${code}`;
